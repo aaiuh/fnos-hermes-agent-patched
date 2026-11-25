@@ -70,11 +70,13 @@ uv pip install --python "$WORK/icons-venv/bin/python" --no-deps Pillow==13.0.0 r
 "$WORK/icons-venv/bin/python" "$SRC/scripts/generate_icons.py" --source "$SRC" --out "$WORK/icons"
 (cd -- "$SRC" && "$NODE" scripts/build/web.mjs --source "$SRC" --icons "$WORK/icons" --out "$SRC/hermes_cli/web_dist")
 python3 -B scripts/prepare-runtime.py --source "$SRC" --node "$NODE" --prepared-icons "$WORK/icons/web/public"
-# Fork PWA injection AFTER prepare-runtime published app/hermes-src: the
+# Fork patch step AFTER prepare-runtime published app/hermes-src: the
 # official freshness receipt must be verified on the pristine build output
-# first; assets are added and the fork receipt (.fnos-runtime.json) is
-# rewritten consistently afterwards, before tar.
-python3 -B scripts/apply-pwa-final.py patches/pwa app/hermes-src
+# first (and archive_source exports via git archive, so worktree patches
+# never reach the stage). Core snapshots + PWA assets are applied on the
+# stage tree and the fork receipt (.fnos-runtime.json) is rewritten
+# consistently afterwards, before tar.
+python3 -B scripts/apply-fork-patches.py patches app/hermes-src
 mkdir -p runtime/tui
 ARCHIVE="hermes-src-$HERMES_VERSION-${HERMES_COMMIT:0:12}.tar.gz"
 tar -C app --sort=name --owner=0 --group=0 --numeric-owner --mtime='2026-11-09 00:00:00' -czf "runtime/$ARCHIVE" hermes-src
