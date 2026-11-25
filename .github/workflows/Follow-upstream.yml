@@ -64,9 +64,9 @@ jobs:
           if changed == 'true':
               new_core = {'HERMES_VERSION': tag, 'HERMES_COMMIT': refs[tag + '^{}'], 'HERMES_TAG': refs[tag]}
               Path('config/bootstrap/hermes-version.env').write_text(''.join(f'{k}={v}\n' for k, v in new_core.items()))
-              Path('manifest').write_text(re.sub(r'^version=.*$', f'version={version}', Path('manifest').read_text(), flags=re.M))
+              Path('manifest').write_text(re.sub(r'^(version\s*=\s*).*$', lambda m: m.group(1) + version, Path('manifest').read_text(), flags=re.M))
               app_env = Path('config/bootstrap/app-version.env')
-              app_env.write_text(re.sub(r'^APP_VERSION=.*$', f'APP_VERSION={version}', app_env.read_text(), flags=re.M))
+              app_env.write_text(re.sub(r'^(APP_VERSION\s*=\s*).*$', lambda m: m.group(1) + version, app_env.read_text(), flags=re.M))
           with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
               stream.write(f'core={tag}\nversion={version}\nchanged={changed}\n')
           PY
