@@ -1,5 +1,5 @@
 diff --git a/hermes_cli/dashboard_auth/middleware.py b/hermes_cli/dashboard_auth/middleware.py
-index 29e8ee3..87293af 100755
+index 29e8ee3..87293af 100644
 --- a/hermes_cli/dashboard_auth/middleware.py
 +++ b/hermes_cli/dashboard_auth/middleware.py
 @@ -52,7 +52,13 @@ _GATE_PUBLIC_PREFIXES: tuple[str, ...] = (

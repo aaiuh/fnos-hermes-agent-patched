@@ -92,8 +92,11 @@ def clean_source(source: Path) -> None:
             "hermes_cli/dashboard_auth/middleware.py",
             "hermes_cli/web_server_static_assets.py",
         }
+        # Porcelain v1: XY<space>path. X/Y are status codes, path starts after
+        # a single space following the two status columns. Handle both the
+        # regular 'XY path' form and any 'X ' or ' Y' short forms.
         unexpected = [line for line in status.splitlines()
-                      if line[3:].split(" -> ")[-1].strip('"') not in patched]
+                      if line[2:].strip().split(" -> ")[-1].strip('"') not in patched]
         if unexpected:
             # fork diagnosis: log the exact unexpected entries (this is our own
             # CI; upstream deliberately printed nothing, we need the names).
