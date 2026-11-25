@@ -66,11 +66,15 @@ fi
 uv venv --python "${HERMES_BUILD_PYTHON:-3.14}" "$WORK/icons-venv"
 uv pip install --python "$WORK/icons-venv/bin/python" --no-deps Pillow==13.0.0 resvg-py==0.5.0
 (cd -- "$SRC" && "$NODE" apps/desktop/scripts/build-webapp.mjs)
-bash scripts/apply-pwa.sh "$SRC"
 "$NODE" "$SRC/scripts/build/node-deps.mjs" --source "$SRC" --workspace web
 "$WORK/icons-venv/bin/python" "$SRC/scripts/generate_icons.py" --source "$SRC" --out "$WORK/icons"
 (cd -- "$SRC" && "$NODE" scripts/build/web.mjs --source "$SRC" --icons "$WORK/icons" --out "$SRC/hermes_cli/web_dist")
 python3 -B scripts/prepare-runtime.py --source "$SRC" --node "$NODE" --prepared-icons "$WORK/icons/web/public"
+# Fork PWA injection AFTER prepare-runtime published app/hermes-src: the
+# official freshness receipt must be verified on the pristine build output
+# first; assets are added and the fork receipt (.fnos-runtime.json) is
+# rewritten consistently afterwards, before tar.
+python3 -B scripts/apply-pwa-final.py patches/pwa app/hermes-src
 mkdir -p runtime/tui
 ARCHIVE="hermes-src-$HERMES_VERSION-${HERMES_COMMIT:0:12}.tar.gz"
 tar -C app --sort=name --owner=0 --group=0 --numeric-owner --mtime='2026-11-09 00:00:00' -czf "runtime/$ARCHIVE" hermes-src
