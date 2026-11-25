@@ -84,9 +84,19 @@ def clean_source(source: Path) -> None:
     tag = git(source, "rev-parse", f"refs/tags/{TAG}^{{commit}}")
     if head != COMMIT or tag != COMMIT:
         raise PrepareError(f"Wrong version: HEAD={head}, {TAG}={tag}; expected {COMMIT}")
-    if git(source, "status", "--porcelain=v1", "--untracked-files=all", "--ignore-submodules=none"):
-        # 不打印任意用户文件名，也不读取未跟踪或被忽略的密钥。
-        raise PrepareError("Dirty Git worktree (tracked or untracked changes); refusing to package")
+    status = git(source, "status", "--porcelain=v1", "--untracked-files=all", "--ignore-submodules=none")
+    if status:
+        # Fork patch set: these tracked files are intentionally modified after
+        # clone by scripts/apply-patches.sh. Anything else dirty still refuses.
+        patched = {
+            "hermes_cli/dashboard_auth/middleware.py",
+            "hermes_cli/web_server_static_assets.py",
+        }
+        unexpected = [line for line in status.splitlines()
+                      if line[3:].split(" -> ")[-1].strip('"') not in patched]
+        if unexpected:
+            # 不打印任意用户文件名，也不读取未跟踪或被忽略的密钥。
+            raise PrepareError("Dirty Git worktree (unexpected changes beyond the fork patch set); refusing to package")
     if git(source, "ls-files", "-v").splitlines() and any(
         line[0].islower() or line.startswith("S ") for line in git(source, "ls-files", "-v").splitlines()
     ):
