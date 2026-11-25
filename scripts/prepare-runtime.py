@@ -95,6 +95,10 @@ def clean_source(source: Path) -> None:
         unexpected = [line for line in status.splitlines()
                       if line[3:].split(" -> ")[-1].strip('"') not in patched]
         if unexpected:
+            # fork diagnosis: log the exact unexpected entries (this is our own
+            # CI; upstream deliberately printed nothing, we need the names).
+            for line in unexpected:
+                print(f"prepare-runtime: unexpected dirty entry: {line!r}", file=sys.stderr)
             # 不打印任意用户文件名，也不读取未跟踪或被忽略的密钥。
             raise PrepareError("Dirty Git worktree (unexpected changes beyond the fork patch set); refusing to package")
     if git(source, "ls-files", "-v").splitlines() and any(
