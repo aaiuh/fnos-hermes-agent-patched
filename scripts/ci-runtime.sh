@@ -28,6 +28,9 @@ SRC="$WORK/upstream"
 git clone --depth 1 --single-branch --branch "$HERMES_VERSION" https://github.com/NousResearch/hermes-agent.git "$SRC"
 [[ "$(git -C "$SRC" rev-parse HEAD)" == "$HERMES_COMMIT" ]] || { printf '%s\n' 'Official source commit mismatch' >&2; exit 1; }
 [[ "$(git -C "$SRC" rev-parse "refs/tags/$HERMES_VERSION")" == "$HERMES_TAG" ]] || { printf '%s\n' 'Official tag object mismatch' >&2; exit 1; }
+# Reverse-proxy / panel-launch / PWA patches: applied to the official source
+# before build; git apply fails on upstream drift, stopping the build.
+bash scripts/apply-patches.sh "$SRC"
 # 0.23.1 起官方前端依赖改用 pnpm，版本和各平台 SHA256 固定在 pm/lock.json。
 # 照上游 pm 的布局：原生可执行包 + 同版本 JS 包里的 dist/（内置 node-gyp）。
 if python3 -c 'import json,sys; sys.exit(0 if "pnpm" in json.load(open(sys.argv[1]))["packages"] else 1)' "$SRC/pm/lock.json"; then

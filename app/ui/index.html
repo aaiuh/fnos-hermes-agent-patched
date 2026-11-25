@@ -2281,6 +2281,20 @@
       embedPrewarmEnd();
       return;
     }
+    // [fnos-mod] gated 模式下面板反代把 WebApp 入口导到登录页（/webapp/login）。
+    // 登录页停在 iframe 里时也撤去占位层显示登录表单；登录后 iframe 导航到
+    // /webapp/ 由上面的 embedFrameReady 分支渲染，cookie 保持登录态免重复登录。
+    if(/\/webapp\/login(?:\?|$)/.test(path)){
+      frame.style.visibility = 'visible';
+      embedClearTimer();
+      embedState.phase = 'loaded';
+      embedState.loadedAt = Date.now();
+      var lb = document.getElementById('webappPlaceholder');
+      if(lb){ lb.hidden = true; lb.classList.remove('error'); }
+      setAttr('viewWebapp', 'aria-busy', 'false');
+      embedPrewarmEnd();
+      return;
+    }
     if(Date.now() - embedState.startedAt > EMBED_START_LIMIT_MS + EMBED_HANDOFF_LIMIT_MS){
       embedFail('WebApp 页面加载超时，请重试或在新标签页打开');
       return;

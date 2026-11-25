@@ -1,0 +1,19 @@
+diff --git a/hermes_cli/dashboard_auth/middleware.py b/hermes_cli/dashboard_auth/middleware.py
+index 29e8ee3..87293af 100755
+--- a/hermes_cli/dashboard_auth/middleware.py
++++ b/hermes_cli/dashboard_auth/middleware.py
+@@ -52,7 +52,13 @@ _GATE_PUBLIC_PREFIXES: tuple[str, ...] = (
+ # Page icons, matched exactly. Browsers fetch them without cookies (the Webapp's page icon and
+ # home-screen icon are ``/apple-touch-icon.png``), so behind the gate they hit the sign-in redirect
+ # and log an auto-SSO ``login_start`` with no sign-in behind it.
+-_GATE_PUBLIC_ICONS: frozenset[str] = frozenset({"/apple-touch-icon.png"})
++_GATE_PUBLIC_ICONS: frozenset[str] = frozenset({
++    "/apple-touch-icon.png",
++    # PWA install: Chrome fetches the manifest and icons WITHOUT the session cookie,
++    # so behind the gate they must answer anonymously or installability fails
++    # (manifest-parsing-or-network-error). These are non-sensitive public metadata.
++    "/manifest.webmanifest", "/icon-192.png", "/icon-512.png",
++})
+ 
+ 
+ def _path_is_public(path: str) -> bool:

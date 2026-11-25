@@ -212,7 +212,9 @@ def environment_public_url(name):
 
 def drop_public_urls(config):
     changed = False
-    for section in ("webapp", "dashboard"):
+    # [fnos-mod] 只清 dashboard 的 public_url（dashboard 的公网入口由面板管理）；
+    # webapp.public_url 是官方内核支持的正规反代入口，予以保留。
+    for section in ("dashboard",):
         value = config.get(section)
         if isinstance(value, dict) and "public_url" in value:
             value.pop("public_url")
@@ -309,11 +311,10 @@ def configure_default(home):
     if any("enabled" in block for block in blocks):
         return {"changed": False}
     address = effective.get("webapp", {})
-    if (address.get("host", "127.0.0.1") != "127.0.0.1"
-            or type(address.get("port", 9120)) is not int or address.get("port", 9120) != 9120
-            or any("public_url" in block for block in blocks)
-            or os.environ.get("HERMES_WEBAPP_PUBLIC_URL")):
-        raise ControlError("Default WebApp requires 127.0.0.1:9120 without a public URL; existing settings preserved", 409)
+    # [fnos-mod] 不再要求回环 + 无 public_url：官方内核本就支持通配绑定并由
+    # dashboard 登录门守卫，用户可自行配置 host / public_url。
+    if (type(address.get("port", 9120)) is not int or address.get("port", 9120) != 9120):
+        raise ControlError("Default WebApp requires port 9120; existing settings preserved", 409)
     assert_idle(home)
     # Best-effort stale-snapshot detection, not a cross-process transaction lock.
     if default_config_snapshot(home) != snapshot:
@@ -321,9 +322,9 @@ def configure_default(home):
     require_stopped()
     updated = dict(config.get("webapp", {}))
     updated["enabled"] = True
-    for key, value in (("host", "127.0.0.1"), ("port", 9120)):
-        if key not in address:
-            updated.setdefault(key, value)
+    # [fnos-mod] 默认值只做兜底，不覆盖用户已配的 host / public_url
+    updated.setdefault("host", "127.0.0.1")
+    updated.setdefault("port", 9120)
     config["webapp"] = updated
     atomic_config_replace(home / "config.yaml", config)
     return {"changed": True}
@@ -393,11 +394,16 @@ def execute(home, action, payload):
         updated = dict(previous)
         updated["enabled"] = enabled
         if enabled:
-            updated.pop("public_url", None)
             port = payload.get("port", 9120)
             if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
                 raise ValueError("Invalid WebApp port")
-            updated.update(host="127.0.0.1", port=port)
+            # [fnos-mod] 保留用户配置的 host 与 public_url：官方内核支持通配绑定
+            # 并由 dashboard 登录门守卫；此处不再强制写回 127.0.0.1。
+            host = updated.get("host", "127.0.0.1")
+            if host not in ("127.0.0.1", "::1", "localhost", "0.0.0.0", "::"):
+                host = "127.0.0.1"
+            updated["host"] = host
+            updated["port"] = port
         dashboard = config.get("dashboard")
         dashboard_changed = enabled and isinstance(dashboard, dict) and "public_url" in dashboard
         changed = previous != updated or dashboard_changed

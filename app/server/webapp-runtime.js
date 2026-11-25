@@ -70,7 +70,12 @@ async function probeWebapp(origin) {
     await response.body?.cancel();
     // Official launch_page returns a public HTML handoff page before ticket
     // redemption. 401/403, a sign-in redirect, 404 and 503 are not that page.
-    return response.status === 200;
+    if (response.status === 200) return true;
+    // [fnos-mod] gated 模式（0.0.0.0 绑定 + 登录门）下 /webapp/launch 会重定向到
+    // 登录页（302/303/307），这同样证明 WebApp 已在服务。
+    if ([302, 303, 307].includes(response.status) &&
+        /\/login(?:\?|$)/.test(response.headers.get("location") || "")) return true;
+    return false;
   } catch { return false; }
 }
 
@@ -297,7 +302,12 @@ export function createWebappRuntime({ control, startGateway, stopGateway, basePa
   const launchHash = /^#ticket=[A-Za-z0-9_-]{43}(&query=[^&#]*)?$/;
   function launchLink(result) {
     // 上游会保留启动时 public_url 带来的 auth_required，只有重启才能清除。
-    if (result.sign_in === true) throw Object.assign(new WebappError("WebApp still demands a separate sign-in; restart Gateway to reset its public address", 409), { signIn: true });
+    if (result.sign_in === true) {
+      // [fnos-mod] gated 模式（0.0.0.0 绑定 + 登录门）下 gateway 返回 sign_in:true。
+      // 不签发一次性 ticket，直接把浏览器导到面板反代的登录入口；登录后由
+      // next 回到 WebApp 主界面，cookie 保持登录态。
+      return { ok: true, path: `${basePath}/webapp/login`, hash: "" };
+    }
     let url;
     try { url = new URL(result.url); } catch { throw new WebappError("Gateway returned an invalid WebApp URL"); }
     if (url.origin !== `http://127.0.0.1:${port}` || url.pathname !== "/webapp/launch" || url.search || !launchHash.test(url.hash)) {

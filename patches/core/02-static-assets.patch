@@ -1,0 +1,18 @@
+diff --git a/hermes_cli/web_server_static_assets.py b/hermes_cli/web_server_static_assets.py
+index 8d85863..5a2edd6 100755
+--- a/hermes_cli/web_server_static_assets.py
++++ b/hermes_cli/web_server_static_assets.py
+@@ -17,7 +17,12 @@ from hermes_cli._startup_fast import project_root_str
+ STATIC_ASSET_PREFIXES: tuple[str, ...] = ("assets/", "ds-assets/", "fonts/", "fonts-terminal/")
+ # Root page icons answer without sign-in, so a missing (or out-of-dist) icon must be a 404, not
+ # the SPA shell served anonymously.
+-STATIC_ASSET_FILES: frozenset[str] = frozenset({"apple-touch-icon.png", "favicon.ico"})
++STATIC_ASSET_FILES: frozenset[str] = frozenset({
++    "apple-touch-icon.png", "favicon.ico",
++    # PWA install assets: answered anonymously (see dashboard_auth middleware), so a
++    # miss must be a 404, never the SPA shell served anonymously.
++    "manifest.webmanifest", "icon-192.png", "icon-512.png",
++})
+ _PUBLIC_FONT_DIRS: tuple[str, ...] = ("fonts", "fonts-terminal")
+ _WEB_PUBLIC = Path(project_root_str()) / "web" / "public"
+ 

@@ -1,0 +1,90 @@
+name: Follow upstream and rebuild
+
+on:
+  schedule:
+    - cron: '17 2 * * *'   # daily 02:17 UTC = 10:17 CST
+  workflow_dispatch:
+    inputs:
+      core:
+        description: 'Official core tag to build (blank = newest stable vX.Y.Z)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: follow-upstream
+  cancel-in-progress: false
+
+jobs:
+  follow:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      core: ${{ steps.check.outputs.core }}
+      version: ${{ steps.check.outputs.version }}
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Check upstream for a newer stable core
+        id: check
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess
+          from pathlib import Path
+          UPSTREAM = 'https://github.com/NousResearch/hermes-agent.git'
+          def assignments(path):
+              return dict(re.findall(r'^([A-Z_a-z][\w]*)\s*=\s*(.*?)\s*$', Path(path).read_text(), re.M))
+          manifest = assignments('manifest')
+          core = assignments('config/bootstrap/hermes-version.env')
+          current = core['HERMES_VERSION']
+          requested = os.environ.get('INPUTS_CORE', '').strip() or (os.environ.get('FOLLOW_REQUESTED_CORE', '') or '').strip()
+          refs = {}
+          for line in subprocess.check_output(['git', 'ls-remote', '--tags', UPSTREAM], text=True).splitlines():
+              sha, ref = line.split('\t')
+              refs[ref.removeprefix('refs/tags/')] = sha
+          def official(t):
+              return re.fullmatch(r'v\d+\.\d+\.\d+', t) and int(t[1:].split('.')[0]) < 2000
+          stable = sorted((t for t in refs if official(t)), key=lambda t: tuple(int(p) for p in t[1:].split('.')))
+          if requested:
+              tag = requested
+              if not official(tag) or tag not in refs or tag + '^{}' not in refs:
+                  raise SystemExit(f'Not an official annotated release tag: {tag}')
+          else:
+              tag = stable[-1]
+          changed = 'true' if tag != current else 'false'
+          prefix = tag[1:]
+          serial = int(manifest['version'].split('-')[1]) + 1 if changed == 'true' else manifest['version'].split('-')[1]
+          version = f'{prefix}-{serial:02d}'
+          if changed == 'true':
+              new_core = {'HERMES_VERSION': tag, 'HERMES_COMMIT': refs[tag + '^{}'], 'HERMES_TAG': refs[tag]}
+              Path('config/bootstrap/hermes-version.env').write_text(''.join(f'{k}={v}\n' for k, v in new_core.items()))
+              Path('manifest').write_text(re.sub(r'^version=.*$', f'version={version}', Path('manifest').read_text(), flags=re.M))
+              app_env = Path('config/bootstrap/app-version.env')
+              app_env.write_text(re.sub(r'^APP_VERSION=.*$', f'APP_VERSION={version}', app_env.read_text(), flags=re.M))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write(f'core={tag}\nversion={version}\nchanged={changed}\n')
+          PY
+        env:
+          INPUTS_CORE: ${{ inputs.core }}
+      - name: Commit version bump (if new core)
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name "follow-bot"
+          git config user.email "follow-bot@users.noreply.github.com"
+          git add config/bootstrap/hermes-version.env manifest config/bootstrap/app-version.env
+          git commit -m "Follow upstream core ${{ steps.check.outputs.core }}"
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
+      - name: Trigger build workflow
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          gh workflow run Build_fnos-hermes-agent.yml \
+            -f version="${{ steps.check.outputs.version }}" \
+            -f hermes_version="${{ steps.check.outputs.core }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
