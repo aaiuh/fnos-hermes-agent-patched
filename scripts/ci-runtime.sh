@@ -28,8 +28,9 @@ SRC="$WORK/upstream"
 git clone --depth 1 --single-branch --branch "$HERMES_VERSION" https://github.com/NousResearch/hermes-agent.git "$SRC"
 [[ "$(git -C "$SRC" rev-parse HEAD)" == "$HERMES_COMMIT" ]] || { printf '%s\n' 'Official source commit mismatch' >&2; exit 1; }
 [[ "$(git -C "$SRC" rev-parse "refs/tags/$HERMES_VERSION")" == "$HERMES_TAG" ]] || { printf '%s\n' 'Official tag object mismatch' >&2; exit 1; }
-# Reverse-proxy / panel-launch / PWA patches: applied to the official source
-# before build; git apply fails on upstream drift, stopping the build.
+# Reverse-proxy / panel-launch gated-whitelist patches: applied to the official
+# source right after clone; git apply fails on upstream drift, stopping the
+# build. PWA assets are injected after the webapp build (see apply-pwa.sh).
 bash scripts/apply-patches.sh "$SRC"
 # 0.23.1 起官方前端依赖改用 pnpm，版本和各平台 SHA256 固定在 pm/lock.json。
 # 照上游 pm 的布局：原生可执行包 + 同版本 JS 包里的 dist/（内置 node-gyp）。
@@ -65,6 +66,7 @@ fi
 uv venv --python "${HERMES_BUILD_PYTHON:-3.14}" "$WORK/icons-venv"
 uv pip install --python "$WORK/icons-venv/bin/python" --no-deps Pillow==13.0.0 resvg-py==0.5.0
 (cd -- "$SRC" && "$NODE" apps/desktop/scripts/build-webapp.mjs)
+bash scripts/apply-pwa.sh "$SRC"
 "$NODE" "$SRC/scripts/build/node-deps.mjs" --source "$SRC" --workspace web
 "$WORK/icons-venv/bin/python" "$SRC/scripts/generate_icons.py" --source "$SRC" --out "$WORK/icons"
 (cd -- "$SRC" && "$NODE" scripts/build/web.mjs --source "$SRC" --icons "$WORK/icons" --out "$SRC/hermes_cli/web_dist")
