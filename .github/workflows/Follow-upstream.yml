@@ -59,8 +59,11 @@ jobs:
               tag = stable[-1]
           changed = 'true' if tag != current else 'false'
           prefix = tag[1:]
-          serial = int(manifest['version'].split('-')[1]) + 1 if changed == 'true' else manifest['version'].split('-')[1]
-          version = f'{prefix}-{serial:02d}'
+          if changed == 'true':
+              serial = int(manifest['version'].split('-')[1]) + 1
+              version = f'{prefix}-{serial:02d}'
+          else:
+              version = manifest['version'].strip()
           if changed == 'true':
               new_core = {'HERMES_VERSION': tag, 'HERMES_COMMIT': refs[tag + '^{}'], 'HERMES_TAG': refs[tag]}
               Path('config/bootstrap/hermes-version.env').write_text(''.join(f'{k}={v}\n' for k, v in new_core.items()))
